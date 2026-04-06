@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"/>
+<title>欧记牛肉</title>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="欧记牛肉"/>
+<meta name="theme-color" content="#8B1A1A"/>
+<link rel="apple-touch-icon" id="appIcon"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config={theme:{extend:{colors:{brand:{50:'#FDF2F2',100:'#FAE0E0',200:'#F5C0C0',300:'#E88888',400:'#D44444',500:'#C02020',600:'#8B1A1A',700:'#6B1010',800:'#4A0A0A'}}}}}
+</script>
+<style>
+*{-webkit-tap-highlight-color:transparent;box-sizing:border-box}
+html,body,#root{height:100%;margin:0;overflow:hidden}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB",sans-serif;background:#F2F2F7}
+.glass{background:rgba(255,255,255,.94);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px)}
+.glass-dim{background:rgba(0,0,0,.48);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.scroll{overflow-y:auto;-webkit-overflow-scrolling:touch}
+.scroll::-webkit-scrollbar{display:none}
+input[type=number]{-moz-appearance:textfield;appearance:textfield}
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;appearance:none}
+.safe-top{padding-top:env(safe-area-inset-top,44px)}
+.safe-bot{padding-bottom:max(env(safe-area-inset-bottom,0px),8px)}
+.nav-safe{padding-bottom:max(env(safe-area-inset-bottom,0px),12px)}
+select{-webkit-appearance:none;appearance:none}
+</style>
+</head>
+<body>
+<div id="root" style="display:flex;flex-direction:column"></div>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script type="text/babel" data-presets="react">
+const {useState,useEffect,useRef,useCallback,useMemo}=React;
+
+// ── Constants ─────────────────────────────────────────────────
+const WALK_IN='__walkin__';
+const DEF_GOODS=[
+  {id:'g1',name:'牛肉',costPrice:50,defaultPrice:65},
+  {id:'g2',name:'肥牛',costPrice:55,defaultPrice:72},
+  {id:'g3',name:'牛展',costPrice:42,defaultPrice:58},
+  {id:'g4',name:'牛排',costPrice:70,defaultPrice:90},
+  {id:'g5',name:'排腩',costPrice:40,defaultPrice:55},
+  {id:'g6',name:'白腩',costPrice:28,defaultPrice:40},
+  {id:'g7',name:'百叶',costPrice:25,defaultPrice:35},
+  {id:'g8',name:'牛骨',costPrice:10,defaultPrice:18},
+];
+
+// ── Hooks ─────────────────────────────────────────────────────
+function useLS(key,def){
+  const [v,setV]=useState(()=>{try{const s=localStorage.getItem(key);return s?JSON.parse(s):def}catch{return def}});
+  const set=useCallback(fn=>{setV(prev=>{const next=typeof fn==='function'?fn(prev):fn;try{localStorage.setItem(key,JSON.stringify(next))}catch{};return next});},[key]);
+  return [v,set];
+}
+
+// ── Utils ─────────────────────────────────────────────────────
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2);
+const $=n=>`¥${(+n||0).toFixed(2)}`;
+function localDateStr(d=new Date()){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function fmtTime(ts){const d=new Date(ts);return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
+function fmtDateLabel(ds){
+  const today=localDateStr(),yest=localDateStr(new Date(Date.now()-86400000));
+  if(ds===today)return '今天';if(ds===yest)return '昨天';
+  const [,m,d]=ds.split('-');return `${parseInt(m)}月${parseInt(d)}日`;
+}
+function matchesPeriod(ts,period){return localDateStr(new Date(ts)).startsWith(period);}
+function getCurrentYears(){const y=new Date().getFullYear();return Array.from({length:4},(_,i)=>String(y-i));}
+
+// ── App Icon (faithful to reference) ─────────────────────────
+function buildCowIcon(S=192){
+  const cv=document.createElement('canvas');cv.width=cv.height=S*2;
+  const c=cv.getContext('2d');c.scale(2,2);
+
+  // Outer white rounded square with drop shadow
+  c.save();
+  c.shadowColor='rgba(0,0,0,0.18)';c.shadowBlur=S*.08;c.shadowOffsetY=S*.04;
+  const r=S*.22;
+  c.beginPath();c.moveTo(r,0);c.lineTo(S-r,0);c.arcTo(S,0,S,r,r);
+  c.lineTo(S,S-r);c.arcTo(S,S,S-r,S,r);c.lineTo(r,S);c.arcTo(0,S,0,S-r,r);
+  c.lineTo(0,r);c.arcTo(0,0,r,0,r);c.closePath();
+  c.fillStyle='#F0EFEE';c.fill();
+  c.restore();
+
+  // Inner inset tray (slightly smaller, slightly darker)
+  const M=S*.07;
+  const ri=S*.17;
+  c.save();
+  c.beginPath();c.moveTo(M+ri,M);c.lineTo(S-M-ri,M);c.arcTo(S-M,M,S-M,M+ri,ri);
+  c.lineTo(S-M,S-M-ri);c.arcTo(S-M,S-M,S-M-ri,S-M,ri);c.lineTo(M+ri,S-M);c.arcTo(M,S-M,M,S-M-ri,ri);
+  c.lineTo(M,M+ri);c.arcTo(M,M,M+ri,M,ri);c.closePath();
+  // Inset shadow on tray
+  c.fillStyle='#EBEBEA';c.fill();
+  c.strokeStyle='rgba(255,255,255,.9)';c.lineWidth=S*.018;c.stroke();
+  c.restore();
+
+  // Cow shape clip region
+  const CX=S*.5,CY=S*.53,BW=S*.36,BH=S*.32;
+
+  function drawCow(clip){
+    c.beginPath();
+    // Left ear
+    c.ellipse(CX-BW*.88,CY-BH*.1,BW*.22,BH*.18,Math.PI*-.15,0,Math.PI*2);
+    c.closePath();
+    if(clip)c.save(),c.clip();
+
+    c.beginPath();
+    // Right ear
+    c.ellipse(CX+BW*.88,CY-BH*.1,BW*.22,BH*.18,Math.PI*.15,0,Math.PI*2);
+    c.closePath();
+    if(clip)c.clip();
+
+    // Head body
+    c.beginPath();
+    // Top with two horns
+    c.moveTo(CX-BW*.18,CY-BH*.82);
+    // Left horn
+    c.bezierCurveTo(CX-BW*.25,CY-BH*1.15,CX-BW*.42,CY-BH*1.22,CX-BW*.32,CY-BH*.92);
+    c.bezierCurveTo(CX-BW*.38,CY-BH*.78,CX-BW*.5,CY-BH*.68,CX-BW*.5,CY-BH*.5);
+    // Left cheek
+    c.bezierCurveTo(CX-BW*.98,CY-BH*.38,CX-BW*1.0,CY+BH*.3,CX-BW*.55,CY+BH*.62);
+    // Bottom
+    c.bezierCurveTo(CX-BW*.3,CY+BH*.88,CX+BW*.3,CY+BH*.88,CX+BW*.55,CY+BH*.62);
+    // Right cheek
+    c.bezierCurveTo(CX+BW*1.0,CY+BH*.3,CX+BW*.98,CY-BH*.38,CX+BW*.5,CY-BH*.5);
+    c.bezierCurveTo(CX+BW*.5,CY-BH*.68,CX+BW*.38,CY-BH*.78,CX+BW*.32,CY-BH*.92);
+    // Right horn
+    c.bezierCurveTo(CX+BW*.42,CY-BH*1.22,CX+BW*.25,CY-BH*1.15,CX+BW*.18,CY-BH*.82);
+    c.bezierCurveTo(CX+BW*.1,CY-BH*.76,CX-BW*.1,CY-BH*.76,CX-BW*.18,CY-BH*.82);
+    c.closePath();
+    if(clip){
+      c.clip();
+      // Holographic fill
+      const g=c.createLinearGradient(CX-BW*1.1,CY-BH*1.3,CX+BW*1.1,CY+BH*1.1);
+      g.addColorStop(0,  'rgba(255,200,225,.95)');
+      g.addColorStop(.12,'rgba(235,185,255,.95)');
+      g.addColorStop(.25,'rgba(185,205,255,.92)');
+      g.addColorStop(.38,'rgba(155,235,240,.92)');
+      g.addColorStop(.52,'rgba(185,240,200,.90)');
+      g.addColorStop(.65,'rgba(245,245,165,.92)');
+      g.addColorStop(.78,'rgba(255,215,155,.92)');
+      g.addColorStop(.9, 'rgba(255,195,200,.92)');
+      g.addColorStop(1,  'rgba(230,180,255,.90)');
+      c.fillStyle=g;c.fillRect(0,0,S,S);
+      // Inner glow highlight
+      const hl=c.createRadialGradient(CX-BW*.2,CY-BH*.4,0,CX,CY,BW*1.3);
+      hl.addColorStop(0,'rgba(255,255,255,.52)');
+      hl.addColorStop(.5,'rgba(255,255,255,.12)');
+      hl.addColorStop(1,'rgba(255,255,255,0)');
+      c.fillStyle=hl;c.fillRect(0,0,S,S);
+      c.restore();
+    }
+  }
+
+  // Draw ears clipped + filled
+  c.save();
+  // Left ear
+  c.beginPath();c.ellipse(CX-BW*.88,CY-BH*.1,BW*.22,BH*.18,Math.PI*-.15,0,Math.PI*2);c.closePath();c.save();c.clip();
+  const ge=c.createLinearGradient(CX-BW*1.1,CY-BH*1.3,CX+BW*1.1,CY+BH*1.1);
+  ge.addColorStop(0,'rgba(255,200,225,.95)');ge.addColorStop(.5,'rgba(185,235,240,.92)');ge.addColorStop(1,'rgba(230,180,255,.90)');
+  c.fillStyle=ge;c.fillRect(0,0,S,S);c.restore();
+  // Right ear
+  c.beginPath();c.ellipse(CX+BW*.88,CY-BH*.1,BW*.22,BH*.18,Math.PI*.15,0,Math.PI*2);c.closePath();c.save();c.clip();
+  c.fillStyle=ge;c.fillRect(0,0,S,S);c.restore();
+  c.restore();
+
+  // Ear outlines
+  c.save();c.strokeStyle='rgba(255,255,255,.85)';c.lineWidth=S*.016;
+  c.beginPath();c.ellipse(CX-BW*.88,CY-BH*.1,BW*.22,BH*.18,Math.PI*-.15,0,Math.PI*2);c.stroke();
+  c.beginPath();c.ellipse(CX+BW*.88,CY-BH*.1,BW*.22,BH*.18,Math.PI*.15,0,Math.PI*2);c.stroke();
+  c.restore();
+
+  // Draw cow head with holographic fill (clipped)
+  c.save();
+  c.beginPath();
+  c.moveTo(CX-BW*.18,CY-BH*.82);
+  c.bezierCurveTo(CX-BW*.25,CY-BH*1.15,CX-BW*.42,CY-BH*1.22,CX-BW*.32,CY-BH*.92);
+  c.bezierCurveTo(CX-BW*.38,CY-BH*.78,CX-BW*.5,CY-BH*.68,CX-BW*.5,CY-BH*.5);
+  c.bezierCurveTo(CX-BW*.98,CY-BH*.38,CX-BW*1.0,CY+BH*.3,CX-BW*.55,CY+BH*.62);
+  c.bezierCurveTo(CX-BW*.3,CY+BH*.88,CX+BW*.3,CY+BH*.88,CX+BW*.55,CY+BH*.62);
+  c.bezierCurveTo(CX+BW*1.0,CY+BH*.3,CX+BW*.98,CY-BH*.38,CX+BW*.5,CY-BH*.5);
+  c.bezierCurveTo(CX+BW*.5,CY-BH*.68,CX+BW*.38,CY-BH*.78,CX+BW*.32,CY-BH*.92);
+  c.bezierCurveTo(CX+BW*.42,CY-BH*1.22,CX+BW*.25,CY-BH*1.15,CX+BW*.18,CY-BH*.82);
+  c.bezierCurveTo(CX+BW*.1,CY-BH*.76,CX-BW*.1,CY-BH*.76,CX-BW*.18,CY-BH*.82);
+  c.closePath();
+  c.clip();
+  const g2=c.createLinearGradient(CX-BW*1.1,CY-BH*1.3,CX+BW*1.1,CY+BH*1.1);
+  g2.addColorStop(0,  'rgba(255,200,225,.95)');
+  g2.addColorStop(.12,'rgba(235,185,255,.95)');
+  g2.addColorStop(.25,'rgba(185,205,255,.92)');
+  g2.addColorStop(.38,'rgba(155,235,240,.92)');
+  g2.addColorStop(.52,'rgba(185,240,200,.90)');
+  g2.addColorStop(.65,'rgba(245,245,165,.92)');
+  g2.addColorStop(.78,'rgba(255,215,155,.92)');
+  g2.addColorStop(.9, 'rgba(255,195,200,.92)');
+  g2.addColorStop(1,  'rgba(230,180,255,.90)');
+  c.fillStyle=g2;c.fillRect(0,0,S,S);
+  const hl2=c.createRadialGradient(CX-BW*.2,CY-BH*.4,0,CX,CY,BW*1.3);
+  hl2.addColorStop(0,'rgba(255,255,255,.52)');hl2.addColorStop(.5,'rgba(255,255,255,.1)');hl2.addColorStop(1,'rgba(255,255,255,0)');
+  c.fillStyle=hl2;c.fillRect(0,0,S,S);
+  c.restore();
+
+  // Cow head white outline
+  c.save();c.strokeStyle='rgba(255,255,255,.88)';c.lineWidth=S*.022;c.lineJoin='round';
+  c.beginPath();
+  c.moveTo(CX-BW*.18,CY-BH*.82);
+  c.bezierCurveTo(CX-BW*.25,CY-BH*1.15,CX-BW*.42,CY-BH*1.22,CX-BW*.32,CY-BH*.92);
+  c.bezierCurveTo(CX-BW*.38,CY-BH*.78,CX-BW*.5,CY-BH*.68,CX-BW*.5,CY-BH*.5);
+  c.bezierCurveTo(CX-BW*.98,CY-BH*.38,CX-BW*1.0,CY+BH*.3,CX-BW*.55,CY+BH*.62);
+  c.bezierCurveTo(CX-BW*.3,CY+BH*.88,CX+BW*.3,CY+BH*.88,CX+BW*.55,CY+BH*.62);
+  c.bezierCurveTo(CX+BW*1.0,CY+BH*.3,CX+BW*.98,CY-BH*.38,CX+BW*.5,CY-BH*.5);
+  c.bezierCurveTo(CX+BW*.5,CY-BH*.68,CX+BW*.38,CY-BH*.78,CX+BW*.32,CY-BH*.92);
+  c.bezierCurveTo(CX+BW*.42,CY-BH*1.22,CX+BW*.25,CY-BH*1.15,CX+BW*.18,CY-BH*.82);
+  c.bezierCurveTo(CX+BW*.1,CY-BH*.76,CX-BW*.1,CY-BH*.76,CX-BW*.18,CY-BH*.82);
+  c.closePath();c.stroke();c.restore();
+
+  // Eyes (two black vertical ovals)
+  const EY=CY-BH*.08,EX=BW*.2,EW=BW*.1,EH=BH*.26;
+  c.fillStyle='#111111';
+  c.beginPath();c.ellipse(CX-EX,EY,EW,EH,.05,0,Math.PI*2);c.fill();
+  c.beginPath();c.ellipse(CX+EX,EY,EW,EH,-.05,0,Math.PI*2);c.fill();
+  // Eye glint
+  c.fillStyle='rgba(255,255,255,.45)';
+  c.beginPath();c.ellipse(CX-EX-EW*.25,EY-EH*.3,EW*.28,EH*.2,-.3,0,Math.PI*2);c.fill();
+  c.beginPath();c.ellipse(CX+EX-EW*.25,EY-EH*.3,EW*.28,EH*.2,-.3,0,Math.PI*2);c.fill();
+
+  return cv.toDataURL('image/png');
+}
+
+// ── Receipt Canvas ────────────────────────────────────────────
+function rrect(c,x,y,w,h,r){
+  c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.arcTo(x+w,y,x+w,y+r,r);
+  c.lineTo(x+w,y+h-r);c.arcTo(x+w,y+h,x+w-r,y+h,r);c.lineTo(x+r,y+h);
+  c.arcTo(x,y+h,x,y+h-r,r);c.lineTo(x,y+r);c.arcTo(x,y,x+r,y,r);c.closePath();
+}
+function genReceipt(bill,custName,dateStr){
+  const W=1080,F='"PingFang SC","Hiragino Sans GB","Heiti SC",sans-serif';
+  const P=64,ITEM_H=80;
+  const hasDebt=bill.debtAmount>0;
+  const HH=420;
+  const contentH=HH+120+80+bill.items.length*ITEM_H+60+(hasDebt?200:120)+160;
+  const H=Math.max(Math.round(W*16/9),contentH);
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;
+  const c=cv.getContext('2d');
+
+  // BG
+  const bg=c.createLinearGradient(0,0,0,H);
+  bg.addColorStop(0,'#F8F4F0');bg.addColorStop(1,'#EFE9E3');
+  c.fillStyle=bg;c.fillRect(0,0,W,H);
+
+  // Header area with wave
+  c.save();
+  c.beginPath();c.moveTo(0,0);c.lineTo(W,0);c.lineTo(W,HH);
+  c.bezierCurveTo(W*.72,HH+100,W*.28,HH+100,0,HH);c.closePath();
+  const hg=c.createLinearGradient(0,0,W*.5,HH);
+  hg.addColorStop(0,'#9E1C1C');hg.addColorStop(1,'#6B1010');
+  c.fillStyle=hg;c.fill();c.restore();
+
+  // Decorative bg circles
+  c.save();c.globalAlpha=.06;c.fillStyle='#fff';
+  c.beginPath();c.arc(W*.82,HH*.28,200,0,Math.PI*2);c.fill();
+  c.beginPath();c.arc(W*.15,HH*.72,130,0,Math.PI*2);c.fill();
+  c.restore();
+
+  // Store name
+  c.fillStyle='#fff';c.textAlign='center';
+  c.font=`bold 96px ${F}`;
+  c.shadowColor='rgba(0,0,0,.2)';c.shadowBlur=12;
+  c.fillText('欧记牛肉',W/2,180);c.shadowBlur=0;
+  // Subtitle
+  c.font=`40px ${F}`;c.fillStyle='rgba(255,255,255,.65)';c.fillText('OU JI BEEF · 优质牛肉',W/2,250);
+  // Date & customer
+  c.font=`38px ${F}`;c.fillStyle='rgba(255,255,255,.7)';c.fillText(dateStr,W/2,318);
+  if(custName){c.font=`34px ${F}`;c.fillStyle='rgba(255,255,255,.5)';c.fillText(`客户：${custName}`,W/2,378);}
+
+  // White card
+  const CX=56,CY=HH+40,CW=W-112;
+  const cardH=H-CY-56;
+  rrect(c,CX,CY,CW,cardH,28);
+  c.fillStyle='#FFFFFF';c.fill();
+  c.strokeStyle='rgba(0,0,0,.05)';c.lineWidth=2;c.stroke();
+
+  let y=CY+56;
+  // Items header row
+  c.font=`bold 30px ${F}`;c.fillStyle='#BBBBBB';
+  c.textAlign='left';c.fillText('品名',CX+P,y);
+  c.textAlign='center';c.fillText('重量 × 单价',W/2,y);
+  c.textAlign='right';c.fillText('小计',CX+CW-P,y);
+  y+=18;
+  c.strokeStyle='#EDE6DC';c.lineWidth=1.5;
+  c.beginPath();c.moveTo(CX+P,y);c.lineTo(CX+CW-P,y);c.stroke();
+
+  // Item rows
+  bill.items.forEach(it=>{
+    y+=ITEM_H-8;
+    c.font=`bold 42px ${F}`;c.fillStyle='#1A1614';
+    c.textAlign='left';c.fillText(it.goodsName,CX+P,y);
+    c.font=`33px ${F}`;c.fillStyle='#999';
+    c.textAlign='center';c.fillText(`${it.weight}斤 × ¥${it.price}`,W/2,y);
+    c.font=`bold 42px ${F}`;c.fillStyle='#8B1A1A';
+    c.textAlign='right';c.fillText(`¥${it.subtotal.toFixed(2)}`,CX+CW-P,y);
+    y+=16;c.strokeStyle='#F2EBE3';c.lineWidth=1;
+    c.beginPath();c.moveTo(CX+P,y);c.lineTo(CX+CW-P,y);c.stroke();
+  });
+
+  // Dashed divider
+  y+=40;c.save();c.setLineDash([18,12]);c.strokeStyle='#D0C4B8';c.lineWidth=1.5;
+  c.beginPath();c.moveTo(CX+P,y);c.lineTo(CX+CW-P,y);c.stroke();c.restore();
+
+  // Total
+  y+=52;
+  c.font=`bold 54px ${F}`;c.fillStyle='#6B7280';
+  c.textAlign='left';c.fillText('合计',CX+P,y);
+  c.font=`bold 62px ${F}`;c.fillStyle='#8B1A1A';
+  c.textAlign='right';c.fillText(`¥${bill.totalAmount.toFixed(2)}`,CX+CW-P,y);
+
+  if(hasDebt){
+    y+=62;c.font=`38px ${F}`;c.fillStyle='#888';
+    c.textAlign='left';c.fillText('实收',CX+P,y);
+    c.textAlign='right';c.fillText(`¥${bill.paidAmount.toFixed(2)}`,CX+CW-P,y);
+    y+=56;c.font=`bold 44px ${F}`;c.fillStyle='#C42020';
+    c.textAlign='left';c.fillText('欠款',CX+P,y);
+    c.textAlign='right';c.fillText(`¥${bill.debtAmount.toFixed(2)}`,CX+CW-P,y);
+  }
+
+  // Footer
+  const fy=H-56-48;
+  c.font=`32px ${F}`;c.fillStyle='#C8BAB0';c.textAlign='center';c.fillText('感谢惠顾 · 欧记牛肉',W/2,fy);
+  c.font=`26px ${F}`;c.fillStyle='#D8CCC4';c.fillText('Ou Ji Beef  ·  Premium Quality',W/2,fy+44);
+  return cv;
+}
+
+// ── SVG Icons ─────────────────────────────────────────────────
+const IList=({s=22,c='currentColor'})=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>;
+const IGear=({s=22,c='currentColor'})=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>;
+const IPlus=({s=24,c='currentColor'})=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+const IX=({s=14,c='currentColor'})=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+const IDown=({s=14,c='currentColor'})=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>;
+const IShare=({s=18,c='currentColor'})=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>;
+const IPencil=({s=15,c='currentColor'})=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+const ITrash=({s=15,c='currentColor'})=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 011-1h4a1 1 0 011 1v2"/></svg>;
+const ICalendar=({s=15,c='currentColor'})=><svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+
+// ── Shared UI ─────────────────────────────────────────────────
+// Sheet: always shows footer above keyboard on iOS
+function Sheet({title,onClose,footer,children}){
+  return(
+    <div className="fixed inset-0 glass-dim z-50 flex items-end" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{background:'rgba(255,255,255,.97)',borderRadius:'24px 24px 0 0',width:'100%',maxHeight:'85vh',display:'flex',flexDirection:'column',boxShadow:'0 -8px 40px rgba(0,0,0,.18)'}}>
+        <div style={{width:40,height:4,background:'#D1D5DB',borderRadius:9,margin:'12px auto 0',flexShrink:0}}/>
+        {title&&<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 24px',borderBottom:'1px solid #F3F4F6',flexShrink:0}}>
+          <span style={{fontWeight:700,fontSize:16,color:'#111'}}>{title}</span>
+          <button onClick={onClose} style={{width:28,height:28,borderRadius:14,background:'#F3F4F6',border:'none',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer'}}><IX s={13}/></button>
+        </div>}
+        <div style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:'16px 24px'}}>{children}</div>
+        {footer&&<div style={{padding:'12px 24px',borderTop:'1px solid #F3F4F6',flexShrink:0,background:'rgba(255,255,255,.98)',paddingBottom:'max(env(safe-area-inset-bottom,0px),16px)'}}>
+          {footer}
+        </div>}
+      </div>
+    </div>
+  );
+}
+function Btn({children,onClick,variant='primary',disabled=false,cls=''}){
+  const styles={
+    primary:{background:'#8B1A1A',color:'#fff'},
+    ghost:{background:'#F3F4F6',color:'#4B5563'},
+    dark:{background:'#111827',color:'#fff'},
+  };
+  const s=styles[variant]||styles.primary;
+  return<button onClick={onClick} disabled={disabled}
+    style={{...s,flex:1,borderRadius:16,padding:'14px 0',fontWeight:600,fontSize:14,border:'none',cursor:'pointer',opacity:disabled?.5:1,transition:'transform .1s',WebkitTapHighlightColor:'transparent'}}
+    onTouchStart={e=>e.currentTarget.style.transform='scale(.97)'}
+    onTouchEnd={e=>e.currentTarget.style.transform=''}
+    className={cls}>{children}</button>;
+}
+
+// ── Date Pill ─────────────────────────────────────────────────
+function DatePill({value,onChange,type='date',label}){
+  return(
+    <div style={{position:'relative',flexShrink:0}}>
+      <div style={{display:'flex',alignItems:'center',gap:6,background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.3)',borderRadius:12,padding:'8px 12px',pointerEvents:'none',userSelect:'none'}}>
+        <ICalendar s={14} c="rgba(255,255,255,.8)"/>
+        <span style={{fontSize:13,fontWeight:600,color:'#fff',whiteSpace:'nowrap'}}>{label}</span>
+      </div>
+      <input type={type} value={value} onChange={e=>e.target.value&&onChange(e.target.value)}
+        style={{position:'absolute',inset:0,opacity:0,width:'100%',height:'100%',cursor:'pointer',fontSize:16}}/>
+    </div>
+  );
+}
+
+// ── Swipe to Delete ───────────────────────────────────────────
+function SwipeRow({onDelete,children}){
+  const [off,setOff]=useState(0);
+  const drag=useRef(false);const sx=useRef(0);const so=useRef(0);
+  const SNAP=76;
+  const onTS=e=>{drag.current=true;sx.current=e.touches[0].clientX;so.current=off;};
+  const onTM=e=>{if(!drag.current)return;const dx=e.touches[0].clientX-sx.current;setOff(Math.max(-SNAP,Math.min(0,so.current+dx)));};
+  const onTE=()=>{drag.current=false;setOff(off<-SNAP/2?-SNAP:0);};
+  return(
+    <div style={{position:'relative',overflow:'hidden'}}>
+      <div style={{position:'absolute',right:0,top:0,bottom:0,width:SNAP,background:'#EF4444',display:'flex',alignItems:'center',justifyContent:'center'}}>
+        <button onClick={()=>{setOff(0);onDelete();}} style={{color:'#fff',background:'none',border:'none',display:'flex',flexDirection:'column',alignItems:'center',gap:2,cursor:'pointer',fontSize:11,fontWeight:700}}>
+          <ITrash s={16} c="white"/>删除
+        </button>
+      </div>
+      <div style={{transform:`translateX(${off}px)`,transition:drag.current?'none':'transform .2s ease'}}
+        onTouchStart={onTS} onTouchMove={onTM} onTouchEnd={onTE}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ── Entry Tab ─────────────────────────────────────────────────
+function EntryTab({goods,customers,lastCustId,selectedDate,setSelectedDate,onBill}){
+  const [custId,setCustId]=useState(lastCustId||WALK_IN);
+  const [rows,setRows]=useState([]);
+  const wRefs=useRef([]);
+
+  useEffect(()=>{
+    const cust=customers.find(c=>c.id===custId);
+    wRefs.current=[];
+    setRows(goods.map(g=>{
+      let price=g.defaultPrice;
+      if(cust&&custId!==WALK_IN){
+        const sp=cust.specificPrices?.find(p=>p.goodsId===g.id);
+        if(sp)price=sp.sellingPrice;
+      }
+      return{id:uid(),goodsId:g.id,name:g.name,price,weight:'',costPrice:g.costPrice};
+    }));
+  },[custId,goods]);
+
+  const total=rows.reduce((s,r)=>s+(+r.weight||0)*(+r.price||0),0);
+  const updW=(id,v)=>setRows(p=>p.map(r=>r.id===id?{...r,weight:v}:r));
+  const del=id=>setRows(p=>p.filter(r=>r.id!==id));
+  function focusNext(idx){for(let i=idx+1;i<rows.length;i++){if(wRefs.current[i]){wRefs.current[i].focus();return;}}wRefs.current[idx]?.blur();}
+
+  function generate(){
+    const active=rows.filter(r=>+r.weight>0);
+    if(!active.length){alert('请先录入斤数');return;}
+    const now=new Date();
+    const [dy,dm,dd]=selectedDate.split('-').map(Number);
+    const ts=new Date(dy,dm-1,dd,now.getHours(),now.getMinutes(),now.getSeconds()).getTime();
+    const cust=customers.find(c=>c.id===custId);
+    onBill({
+      customerId:custId===WALK_IN?null:custId,
+      custName:custId===WALK_IN?'':(cust?.name||''),
+      items:active.map(r=>({goodsName:r.name,price:+r.price,weight:+r.weight,subtotal:(+r.weight)*(+r.price),costPrice:+r.costPrice})),
+      totalAmount:active.reduce((s,r)=>s+(+r.weight)*(+r.price),0),
+      ts,
+    });
+  }
+
+  return(
+    <div style={{flex:1,display:'flex',flexDirection:'column',minHeight:0}}>
+      {/* Top bar inside red header area */}
+      <div style={{padding:'8px 16px 10px',display:'flex',gap:8,alignItems:'center'}}>
+        <DatePill value={selectedDate} onChange={setSelectedDate} type="date" label={fmtDateLabel(selectedDate)}/>
+        <div style={{position:'relative',flex:1}}>
+          <select value={custId} onChange={e=>setCustId(e.target.value)}
+            style={{width:'100%',background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.3)',borderRadius:12,padding:'8px 28px 8px 12px',fontSize:13,fontWeight:600,color:'#fff',outline:'none',appearance:'none',WebkitAppearance:'none',cursor:'pointer'}}>
+            <option value={WALK_IN} style={{color:'#111',background:'#fff'}}>散客</option>
+            {customers.map(c=><option key={c.id} value={c.id} style={{color:'#111',background:'#fff'}}>{c.name}{c.totalDebt>0?' ⚠️':''}</option>)}
+          </select>
+          <div style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',pointerEvents:'none'}}><IDown s={13} c="rgba(255,255,255,.8)"/></div>
+        </div>
+      </div>
+
+      {/* Items table */}
+      <div style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:'0 16px 8px'}}>
+        <div style={{background:'#fff',borderRadius:16,border:'1px solid #F3F4F6',boxShadow:'0 1px 8px rgba(0,0,0,.05)',overflow:'hidden'}}>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 64px 80px 28px',gap:6,padding:'10px 16px',background:'#F9FAFB',borderBottom:'1px solid #F3F4F6'}}>
+            <span style={{fontSize:12,fontWeight:600,color:'#9CA3AF'}}>品名</span>
+            <span style={{fontSize:12,fontWeight:600,color:'#9CA3AF',textAlign:'right'}}>单价</span>
+            <span style={{fontSize:12,fontWeight:600,color:'#9CA3AF',textAlign:'center'}}>斤数</span>
+            <span/>
+          </div>
+          {rows.map((row,idx)=>(
+            <div key={row.id} style={{display:'grid',gridTemplateColumns:'1fr 64px 80px 28px',gap:6,padding:'10px 16px',alignItems:'center',borderBottom:idx<rows.length-1?'1px solid #F9FAFB':'none'}}>
+              <span style={{fontSize:14,fontWeight:500,color:'#1F2937'}}>{row.name}</span>
+              <span style={{fontSize:14,fontWeight:700,color:'#8B1A1A',textAlign:'right'}}>¥{row.price}</span>
+              <input type="number" inputMode="decimal" value={row.weight}
+                ref={el=>wRefs.current[idx]=el}
+                onChange={e=>updW(row.id,e.target.value)}
+                onKeyDown={e=>e.key==='Enter'&&(e.preventDefault(),focusNext(idx))}
+                enterKeyHint="next"
+                placeholder="0.0"
+                style={{width:'100%',fontSize:14,textAlign:'center',border:'1px solid #E5E7EB',borderRadius:8,padding:'6px 4px',outline:'none',background:'#F9FAFB',fontFamily:'inherit'}}
+                onFocus={e=>{e.target.style.borderColor='#8B1A1A';e.target.style.background='#fff';}}
+                onBlur={e=>{e.target.style.borderColor='#E5E7EB';e.target.style.background='#F9FAFB';}}/>
+              <button onClick={()=>del(row.id)}
+                style={{width:24,height:24,borderRadius:12,background:'#F3F4F6',border:'none',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'#9CA3AF'}}>
+                <IX s={11}/>
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Action bar */}
+      <div style={{padding:'8px 16px 12px'}}>
+        {total>0&&<div style={{textAlign:'right',marginBottom:6}}>
+          <span style={{fontSize:17,fontWeight:800,color:'#fff'}}>合计 <span style={{color:'#FFCDD2'}}>{$(total)}</span></span>
+        </div>}
+        <button onClick={generate}
+          style={{width:'100%',background:'#fff',border:'none',color:'#8B1A1A',borderRadius:16,padding:'14px 0',fontSize:16,fontWeight:800,cursor:'pointer',letterSpacing:1,boxShadow:'0 4px 16px rgba(0,0,0,.15)'}}
+          onTouchStart={e=>e.currentTarget.style.opacity='.85'}
+          onTouchEnd={e=>e.currentTarget.style.opacity='1'}>
+          生成账单 →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Bill Preview ──────────────────────────────────────────────
+function BillPreview({data,onClose,onConfirm}){
+  const [paid,setPaid]=useState(data.totalAmount.toFixed(2));
+  const [saving,setSaving]=useState(false);
+  const paidN=+paid||0;
+  const debt=Math.max(0,data.totalAmount-paidN);
+  const dateStr=useMemo(()=>{const d=new Date(data.ts);return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`;},[data.ts]);
+
+  async function doSave(){
+    if(saving)return;
+    setSaving(true);
+    try{
+      const billFull={...data,paidAmount:paidN,debtAmount:debt};
+      const cv=genReceipt(billFull,data.custName,dateStr);
+      const blob=await new Promise(r=>cv.toBlob(r,'image/png'));
+      const file=new File([blob],'欧记牛肉账单.png',{type:'image/png'});
+      // iOS Safari: share sheet → "存储到照片" 直接进相册
+      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+        await navigator.share({files:[file],title:'欧记牛肉账单',text:'欧记牛肉账单'});
+      }else{
+        // 桌面/Android: 直接触发下载
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a');a.href=url;a.download='欧记牛肉账单.png';
+        document.body.appendChild(a);a.click();document.body.removeChild(a);
+        setTimeout(()=>URL.revokeObjectURL(url),3000);
+      }
+    }catch(e){/* AbortError = user cancelled, ignore */}
+    setSaving(false);
+  }
+
+  function confirm(){
+    onConfirm({id:uid(),timestamp:data.ts,customerId:data.customerId,items:data.items,
+      totalAmount:data.totalAmount,paidAmount:paidN,debtAmount:debt,settled:false});
+  }
+
+  return(
+    <div style={{position:'fixed',inset:0,background:'#fff',zIndex:50,display:'flex',flexDirection:'column'}}>
+      {/* Nav */}
+      <div style={{background:'#8B1A1A',paddingTop:'env(safe-area-inset-top,20px)',flexShrink:0}}>
+        <div style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px'}}>
+          <button onClick={onClose} style={{width:32,height:32,borderRadius:16,background:'rgba(255,255,255,.2)',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}><IX s={14} c="white"/></button>
+          <span style={{fontWeight:700,color:'#fff',fontSize:16,flex:1}}>账单预览</span>
+          {data.custName&&<span style={{fontSize:13,color:'rgba(255,255,255,.7)',fontWeight:500}}>{data.custName}</span>}
+        </div>
+      </div>
+
+      {/* Paid editor */}
+      <div style={{padding:'12px 16px',background:'#F9FAFB',borderBottom:'1px solid #F3F4F6',flexShrink:0}}>
+        <div style={{display:'flex',justifyContent:'space-between',marginBottom:8,alignItems:'center'}}>
+          <span style={{fontSize:13,color:'#9CA3AF'}}>应收</span>
+          <span style={{fontSize:13,fontWeight:600,color:'#4B5563'}}>{$(data.totalAmount)}</span>
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:8,background:'#fff',border:'1px solid #E5E7EB',borderRadius:16,padding:'10px 16px',boxShadow:'0 1px 4px rgba(0,0,0,.05)'}}>
+          <span style={{fontSize:14,color:'#9CA3AF',flexShrink:0}}>实收 ¥</span>
+          <input type="number" inputMode="decimal" value={paid} onChange={e=>setPaid(e.target.value)}
+            style={{flex:1,fontSize:24,fontWeight:700,background:'none',border:'none',outline:'none',color:'#111',fontFamily:'inherit'}}/>
+        </div>
+        {debt>0&&<div style={{marginTop:8,background:'#FFF7ED',border:'1px solid #FED7AA',borderRadius:10,padding:'8px 12px',fontSize:13,color:'#C2410C',fontWeight:500}}>
+          ⚠️ 挂账 {$(debt)}（入账后在明细中确认结清）
+        </div>}
+      </div>
+
+      {/* Receipt preview */}
+      <div style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:'16px 16px 8px'}}>
+        <div style={{borderRadius:20,overflow:'hidden',boxShadow:'0 4px 24px rgba(0,0,0,.12)'}}>
+          {/* Header */}
+          <div style={{background:'linear-gradient(135deg,#9E1C1C 0%,#6B1010 100%)',padding:'24px 20px 20px',textAlign:'center',position:'relative'}}>
+            {/* Decorative circles */}
+            <div style={{position:'absolute',top:-20,right:-20,width:80,height:80,borderRadius:40,background:'rgba(255,255,255,.06)'}}/>
+            <div style={{position:'absolute',bottom:-10,left:-10,width:50,height:50,borderRadius:25,background:'rgba(255,255,255,.05)'}}/>
+            <div style={{fontSize:9,fontWeight:500,color:'rgba(255,255,255,.45)',letterSpacing:5,marginBottom:6}}>OU JI BEEF</div>
+            <div style={{fontSize:26,fontWeight:800,color:'#fff',letterSpacing:4,marginBottom:6}}>欧记牛肉</div>
+            <div style={{width:32,height:1,background:'rgba(255,255,255,.3)',margin:'0 auto 8px'}}/>
+            <div style={{fontSize:11,color:'rgba(255,255,255,.6)'}}>{dateStr}{data.custName?` · ${data.custName}`:''}</div>
+          </div>
+          {/* Jagged tear edge */}
+          <div style={{background:'#fff',position:'relative',height:12,overflow:'hidden'}}>
+            <svg viewBox="0 0 320 12" preserveAspectRatio="none" style={{position:'absolute',top:0,left:0,width:'100%',height:'100%'}}>
+              <path d="M0,0 L0,12 L320,12 L320,0 Q310,12 300,0 Q290,12 280,0 Q270,12 260,0 Q250,12 240,0 Q230,12 220,0 Q210,12 200,0 Q190,12 180,0 Q170,12 160,0 Q150,12 140,0 Q130,12 120,0 Q110,12 100,0 Q90,12 80,0 Q70,12 60,0 Q50,12 40,0 Q30,12 20,0 Q10,12 0,0 Z" fill="linear-gradient(135deg,#9E1C1C,#6B1010)"/>
+              <path d="M0,0 Q10,12 20,0 Q30,12 40,0 Q50,12 60,0 Q70,12 80,0 Q90,12 100,0 Q110,12 120,0 Q130,12 140,0 Q150,12 160,0 Q170,12 180,0 Q190,12 200,0 Q210,12 220,0 Q230,12 240,0 Q250,12 260,0 Q270,12 280,0 Q290,12 300,0 Q310,12 320,0 L320,0 L0,0 Z" fill="#8B1A1A"/>
+            </svg>
+          </div>
+          {/* Items */}
+          <div style={{background:'#fff',padding:'4px 18px 0'}}>
+            <div style={{display:'grid',gridTemplateColumns:'1fr auto auto',gap:10,padding:'8px 0 6px',borderBottom:'1px dashed #E5E7EB',fontSize:10,fontWeight:700,color:'#BBBBBB',letterSpacing:1}}>
+              <span>品名</span><span>斤数 × 单价</span><span>小计</span>
+            </div>
+            {data.items.map((it,i)=>(
+              <div key={i} style={{display:'grid',gridTemplateColumns:'1fr auto auto',gap:10,padding:'9px 0',alignItems:'center',borderBottom:i<data.items.length-1?'1px solid #F9FAFB':'none'}}>
+                <span style={{fontSize:14,fontWeight:700,color:'#1A1614'}}>{it.goodsName}</span>
+                <span style={{fontSize:11,color:'#9CA3AF',whiteSpace:'nowrap'}}>{it.weight}斤 × ¥{it.price}</span>
+                <span style={{fontSize:14,fontWeight:700,color:'#8B1A1A',whiteSpace:'nowrap'}}>{$(it.subtotal)}</span>
+              </div>
+            ))}
+          </div>
+          {/* Dotted divider */}
+          <div style={{background:'#fff',padding:'0 18px'}}>
+            <div style={{borderTop:'1px dashed #D1D5DB',margin:'2px 0'}}/>
+          </div>
+          {/* Total */}
+          <div style={{background:'#fff',padding:'10px 18px 16px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:debt>0?8:0}}>
+              <span style={{fontSize:13,fontWeight:600,color:'#6B7280'}}>合计</span>
+              <span style={{fontSize:22,fontWeight:800,color:'#8B1A1A'}}>{$(data.totalAmount)}</span>
+            </div>
+            {debt>0&&<div style={{background:'#FFF7ED',borderRadius:10,padding:'8px 12px'}}>
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:12,color:'#9CA3AF',marginBottom:4}}><span>实收</span><span>{$(paidN)}</span></div>
+              <div style={{display:'flex',justifyContent:'space-between',fontSize:13,fontWeight:700,color:'#DC2626'}}><span>⚠️ 欠款</span><span>{$(debt)}</span></div>
+            </div>}
+          </div>
+          {/* Footer */}
+          <div style={{background:'#F9FAFB',padding:'10px 18px',textAlign:'center',borderTop:'1px dashed #E5E7EB'}}>
+            <div style={{fontSize:10,color:'#C8BAB0',letterSpacing:2}}>感谢惠顾 · THANK YOU</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div style={{padding:'12px 16px',borderTop:'1px solid #F3F4F6',display:'flex',gap:8,flexShrink:0,paddingBottom:'max(env(safe-area-inset-bottom,0px),12px)',background:'#fff'}}>
+        <Btn variant="ghost" onClick={onClose}>取消</Btn>
+        <button onClick={doSave} disabled={saving}
+          style={{flex:1,background:'#111827',color:'#fff',borderRadius:16,padding:'14px 0',fontSize:14,fontWeight:600,border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6,opacity:saving?.7:1}}>
+          <IShare s={14} c="white"/>{saving?'生成中…':'保存图片'}
+        </button>
+        <Btn onClick={confirm}>确认入账</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ── Records Tab ───────────────────────────────────────────────
+function RecordsTab({records,setRecords,expenses,customers,onAddExpense}){
+  const [mode,setMode]=useState('day');
+  const [dayP,setDayP]=useState(()=>localDateStr());
+  const [monP,setMonP]=useState(()=>localDateStr().slice(0,7));
+  const [yrP,setYrP]=useState(()=>String(new Date().getFullYear()));
+  const [exDay,setExDay]=useState(null);
+  const [exRec,setExRec]=useState(null);
+
+  const period=mode==='day'?dayP:mode==='month'?monP:yrP;
+  const recs=useMemo(()=>records.filter(r=>matchesPeriod(r.timestamp,period)),[records,period]);
+  const exps=useMemo(()=>expenses.filter(e=>matchesPeriod(e.timestamp,period)),[expenses,period]);
+  const revenue=recs.reduce((s,r)=>s+r.totalAmount,0);
+  const cost=recs.reduce((s,r)=>s+r.items.reduce((ss,i)=>ss+(i.costPrice||0)*(i.weight||0),0),0);
+  const expSum=exps.reduce((s,e)=>s+e.amount,0);
+  const profit=revenue-cost-expSum;
+  const cn=id=>id?(customers.find(c=>c.id===id)?.name||'未知'):'';
+  function delRec(id){if(!confirm('确认删除此账单？'))return;setRecords(p=>p.filter(r=>r.id!==id));}
+  function toggleSettle(id){setRecords(p=>p.map(r=>r.id===id?{...r,settled:!r.settled}:r));}
+
+  const periodLabel=useMemo(()=>{
+    if(mode==='day')return fmtDateLabel(dayP);
+    if(mode==='month'){const[y,m]=monP.split('-');return `${y}年${parseInt(m)}月`;}
+    return `${yrP}年`;
+  },[mode,dayP,monP,yrP]);
+
+  function RecRow({rec}){
+    const open=exRec===rec.id;
+    const name=cn(rec.customerId)||'散客';
+    return(
+      <SwipeRow onDelete={()=>delRec(rec.id)}>
+        <div>
+          <div onClick={()=>setExRec(open?null:rec.id)}
+            style={{display:'flex',alignItems:'center',padding:'12px 16px',cursor:'pointer',background:'#fff'}}>
+            <div style={{flex:1}}>
+              <div style={{display:'flex',flexWrap:'wrap',alignItems:'center',gap:4,marginBottom:2}}>
+                <span style={{fontSize:14,fontWeight:700,color:'#111'}}>{name}</span>
+                {rec.debtAmount>0&&<span style={{fontSize:11,background:'#FFF7ED',color:'#EA580C',padding:'2px 6px',borderRadius:99,fontWeight:500}}>欠{$(rec.debtAmount)}</span>}
+                {rec.settled?<span style={{fontSize:11,background:'#F0FDF4',color:'#16A34A',padding:'2px 6px',borderRadius:99,fontWeight:500}}>✓结清</span>
+                  :<span style={{fontSize:11,background:'#F3F4F6',color:'#9CA3AF',padding:'2px 6px',borderRadius:99}}>待结清</span>}
+              </div>
+              <span style={{fontSize:11,color:'#9CA3AF'}}>{fmtTime(rec.timestamp)}</span>
+            </div>
+            <div style={{textAlign:'right',marginRight:8}}>
+              <div style={{fontSize:14,fontWeight:700,color:'#111'}}>{$(rec.totalAmount)}</div>
+              {rec.debtAmount>0&&<div style={{fontSize:11,color:'#9CA3AF'}}>实收{$(rec.paidAmount)}</div>}
+            </div>
+            <div style={{color:'#D1D5DB',transform:open?'rotate(180deg)':'',transition:'transform .2s'}}><IDown s={14}/></div>
+          </div>
+          {open&&<div style={{borderTop:'1px solid #F9FAFB',padding:'8px 16px 12px',background:'#fff'}}>
+            {rec.items.map((it,i)=>(
+              <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 0',borderBottom:i<rec.items.length-1?'1px solid #F9FAFB':'none',fontSize:12}}>
+                <span style={{fontWeight:500,color:'#374151'}}>{it.goodsName}</span>
+                <span style={{color:'#9CA3AF'}}>{it.weight}斤×¥{it.price}</span>
+                <span style={{fontWeight:600,color:'#111'}}>{$(it.subtotal)}</span>
+              </div>
+            ))}
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:10,paddingTop:8,borderTop:'1px solid #F3F4F6'}}>
+              <span style={{fontSize:11,color:'#9CA3AF'}}>{rec.settled?'已结清':'入账未结清'}</span>
+              <button onClick={e=>{e.stopPropagation();toggleSettle(rec.id);}}
+                style={{fontSize:11,fontWeight:600,padding:'6px 12px',borderRadius:10,border:'1px solid',cursor:'pointer',
+                  background:rec.settled?'#F9FAFB':'#F0FDF4',color:rec.settled?'#9CA3AF':'#16A34A',borderColor:rec.settled?'#E5E7EB':'#BBF7D0'}}>
+                {rec.settled?'撤销结清':'确认结清'}
+              </button>
+            </div>
+          </div>}
+        </div>
+      </SwipeRow>
+    );
+  }
+
+  const byDay=useMemo(()=>{
+    if(mode!=='month')return null;
+    const days={};recs.forEach(r=>{const ds=localDateStr(new Date(r.timestamp));if(!days[ds])days[ds]=[];days[ds].push(r);});
+    return Object.entries(days).sort(([a],[b])=>b.localeCompare(a));
+  },[recs,mode]);
+  const byMonth=useMemo(()=>{
+    if(mode!=='year')return null;
+    const months={};recs.forEach(r=>{const ms=localDateStr(new Date(r.timestamp)).slice(0,7);if(!months[ms])months[ms]=[];months[ms].push(r);});
+    return Object.entries(months).sort(([a],[b])=>b.localeCompare(a));
+  },[recs,mode]);
+
+  return(
+    <div style={{flex:1,display:'flex',flexDirection:'column',minHeight:0}}>
+      {/* Mode + period picker – lives in header band */}
+      <div style={{padding:'8px 16px 10px',display:'flex',gap:8,alignItems:'center'}}>
+        <div style={{display:'flex',background:'rgba(255,255,255,.18)',borderRadius:12,padding:3,flex:1}}>
+          {[['day','按天'],['month','按月'],['year','按年']].map(([k,l])=>(
+            <button key={k} onClick={()=>setMode(k)}
+              style={{flex:1,padding:'6px 0',borderRadius:10,fontSize:12,fontWeight:600,border:'none',cursor:'pointer',
+                background:mode===k?'#fff':'transparent',color:mode===k?'#8B1A1A':'rgba(255,255,255,.8)',transition:'all .15s'}}>
+              {l}
+            </button>
+          ))}
+        </div>
+        {mode==='day'&&<DatePill value={dayP} onChange={setDayP} type="date" label={periodLabel}/>}
+        {mode==='month'&&<DatePill value={monP} onChange={setMonP} type="month" label={periodLabel}/>}
+        {mode==='year'&&(
+          <div style={{position:'relative',flexShrink:0}}>
+            <div style={{display:'flex',alignItems:'center',gap:4,background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.3)',borderRadius:12,padding:'8px 10px',pointerEvents:'none'}}>
+              <ICalendar s={13} c="rgba(255,255,255,.8)"/><span style={{fontSize:13,fontWeight:600,color:'#fff'}}>{periodLabel}</span>
+            </div>
+            <select value={yrP} onChange={e=>setYrP(e.target.value)}
+              style={{position:'absolute',inset:0,opacity:0,width:'100%',height:'100%',cursor:'pointer',fontSize:16}}>
+              {getCurrentYears().map(y=><option key={y}>{y}</option>)}
+            </select>
+          </div>
+        )}
+      </div>
+
+      <div style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:'0 16px 24px'}}>
+        {/* Stats */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:14}}>
+          {[
+            {l:'总收入',v:revenue,c:'#059669',bg:'#ECFDF5'},
+            {l:'货品成本',v:cost,c:'#D97706',bg:'#FFFBEB'},
+            {l:'杂费',v:expSum,c:'#7C3AED',bg:'#F5F3FF',
+              action:<button onClick={onAddExpense} style={{fontSize:11,color:'#8B1A1A',fontWeight:600,marginTop:2,background:'none',border:'none',padding:0,cursor:'pointer'}}>＋ 记杂费</button>},
+            {l:'净利润',v:profit,c:profit>=0?'#8B1A1A':'#DC2626',bg:profit>=0?'#FDF2F2':'#FEF2F2'},
+          ].map((s,i)=>(
+            <div key={i} style={{background:s.bg,borderRadius:16,padding:'12px 14px'}}>
+              <div style={{fontSize:11,color:'#6B7280',marginBottom:4}}>{s.l}</div>
+              <div style={{fontSize:17,fontWeight:700,color:s.c}}>{$(s.v)}</div>
+              {s.action}
+            </div>
+          ))}
+        </div>
+
+        {/* Day view */}
+        {mode==='day'&&<div>
+          <div style={{fontSize:11,fontWeight:600,color:'#9CA3AF',letterSpacing:2,marginBottom:8}}>账单明细 · {recs.length}笔</div>
+          {!recs.length&&<div style={{background:'#fff',borderRadius:16,padding:40,textAlign:'center',fontSize:14,color:'#9CA3AF',border:'1px solid #F3F4F6'}}>当天暂无账单</div>}
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {recs.map(rec=>(
+              <div key={rec.id} style={{background:'#fff',borderRadius:16,border:'1px solid #F3F4F6',boxShadow:'0 1px 6px rgba(0,0,0,.04)',overflow:'hidden'}}>
+                <RecRow rec={rec}/>
+              </div>
+            ))}
+          </div>
+        </div>}
+
+        {/* Month view */}
+        {mode==='month'&&<div>
+          <div style={{fontSize:11,fontWeight:600,color:'#9CA3AF',letterSpacing:2,marginBottom:8}}>按日汇总 · {recs.length}笔</div>
+          {!byDay?.length&&<div style={{background:'#fff',borderRadius:16,padding:40,textAlign:'center',fontSize:14,color:'#9CA3AF',border:'1px solid #F3F4F6'}}>当月暂无账单</div>}
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {byDay?.map(([ds,dayRecs])=>{
+              const dt=dayRecs.reduce((s,r)=>s+r.totalAmount,0);const open=exDay===ds;
+              return(<div key={ds} style={{background:'#fff',borderRadius:16,border:'1px solid #F3F4F6',boxShadow:'0 1px 6px rgba(0,0,0,.04)',overflow:'hidden'}}>
+                <div onClick={()=>setExDay(open?null:ds)} style={{display:'flex',alignItems:'center',padding:'12px 16px',cursor:'pointer'}}>
+                  <div style={{flex:1}}><span style={{fontSize:14,fontWeight:700,color:'#111'}}>{fmtDateLabel(ds)}</span><span style={{fontSize:12,color:'#9CA3AF',marginLeft:6}}>{dayRecs.length}笔</span></div>
+                  <span style={{fontSize:14,fontWeight:700,color:'#111',marginRight:8}}>{$(dt)}</span>
+                  <div style={{color:'#D1D5DB',transform:open?'rotate(180deg)':'',transition:'transform .2s'}}><IDown s={14}/></div>
+                </div>
+                {open&&<div style={{borderTop:'1px solid #F9FAFB',display:'flex',flexDirection:'column'}}>
+                  {dayRecs.map(rec=><div key={rec.id} style={{borderBottom:'1px solid #F9FAFB'}}><RecRow rec={rec}/></div>)}
+                </div>}
+              </div>);
+            })}
+          </div>
+        </div>}
+
+        {/* Year view */}
+        {mode==='year'&&<div>
+          <div style={{fontSize:11,fontWeight:600,color:'#9CA3AF',letterSpacing:2,marginBottom:8}}>按月汇总 · {recs.length}笔</div>
+          {!byMonth?.length&&<div style={{background:'#fff',borderRadius:16,padding:40,textAlign:'center',fontSize:14,color:'#9CA3AF',border:'1px solid #F3F4F6'}}>当年暂无账单</div>}
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {byMonth?.map(([ms,mRecs])=>{
+              const mr=mRecs.reduce((s,r)=>s+r.totalAmount,0);
+              const mc=mRecs.reduce((s,r)=>s+r.items.reduce((ss,i)=>ss+(i.costPrice||0)*(i.weight||0),0),0);
+              const mp=mr-mc;const[,m]=ms.split('-');const open=exDay===ms;
+              return(<div key={ms} style={{background:'#fff',borderRadius:16,border:'1px solid #F3F4F6',boxShadow:'0 1px 6px rgba(0,0,0,.04)',overflow:'hidden'}}>
+                <div onClick={()=>setExDay(open?null:ms)} style={{display:'flex',alignItems:'center',padding:'12px 16px',cursor:'pointer'}}>
+                  <div style={{flex:1}}><span style={{fontSize:14,fontWeight:700,color:'#111'}}>{parseInt(m)}月</span><span style={{fontSize:12,color:'#9CA3AF',marginLeft:6}}>{mRecs.length}笔</span></div>
+                  <div style={{textAlign:'right',marginRight:8}}>
+                    <div style={{fontSize:14,fontWeight:700,color:'#111'}}>{$(mr)}</div>
+                    <div style={{fontSize:11,fontWeight:600,color:mp>=0?'#059669':'#DC2626'}}>利润{$(mp)}</div>
+                  </div>
+                  <div style={{color:'#D1D5DB',transform:open?'rotate(180deg)':'',transition:'transform .2s'}}><IDown s={14}/></div>
+                </div>
+                {open&&<div style={{borderTop:'1px solid #F9FAFB',display:'flex',flexDirection:'column'}}>
+                  {mRecs.map(rec=><div key={rec.id} style={{borderBottom:'1px solid #F9FAFB'}}><RecRow rec={rec}/></div>)}
+                </div>}
+              </div>);
+            })}
+          </div>
+        </div>}
+
+        {exps.length>0&&<div style={{marginTop:14}}>
+          <div style={{fontSize:11,fontWeight:600,color:'#9CA3AF',letterSpacing:2,marginBottom:8}}>杂费明细</div>
+          <div style={{display:'flex',flexDirection:'column',gap:6}}>
+            {exps.map(e=>(
+              <div key={e.id} style={{background:'#fff',borderRadius:12,border:'1px solid #F3F4F6',padding:'10px 16px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <div><div style={{fontSize:14,fontWeight:500,color:'#374151'}}>{e.remark||'杂费'}</div><div style={{fontSize:11,color:'#9CA3AF'}}>{fmtTime(e.timestamp)}</div></div>
+                <span style={{fontSize:14,fontWeight:700,color:'#7C3AED'}}>−{$(e.amount)}</span>
+              </div>
+            ))}
+          </div>
+        </div>}
+      </div>
+    </div>
+  );
+}
+
+// ── Settings Tab ──────────────────────────────────────────────
+function SettingsTab({goods,setGoods,customers,setCustomers}){
+  const [selCust,setSelCust]=useState(WALK_IN);
+  const [showAddCust,setShowAddCust]=useState(false);
+  const [editGood,setEditGood]=useState(null);
+  const [showAddGood,setShowAddGood]=useState(false);
+  const [showDebt,setShowDebt]=useState(null);
+
+  const cust=customers.find(c=>c.id===selCust);
+
+  function getPrice(goodsId){
+    if(selCust===WALK_IN)return goods.find(g=>g.id===goodsId)?.defaultPrice??0;
+    const sp=cust?.specificPrices?.find(p=>p.goodsId===goodsId);
+    // If no specific price set yet, return default but do NOT link — show editable copy
+    return sp!=null?sp.sellingPrice:(goods.find(g=>g.id===goodsId)?.defaultPrice??0);
+  }
+  // Local display state for price inputs (allows empty string while typing)
+  const [priceInputs,setPriceInputs]=useState({});
+  function getPriceDisplay(goodsId){
+    if(goodsId in priceInputs)return priceInputs[goodsId];
+    return String(getPrice(goodsId));
+  }
+  function onPriceChange(goodsId,val){
+    setPriceInputs(p=>({...p,[goodsId]:val}));
+    const num=parseFloat(val);
+    if(isNaN(num))return; // don't save empty/invalid yet
+    if(selCust===WALK_IN){
+      setGoods(gs=>gs.map(g=>g.id===goodsId?{...g,defaultPrice:num}:g));
+    }else{
+      setCustomers(cs=>cs.map(c=>{
+        if(c.id!==selCust)return c;
+        const ex=(c.specificPrices||[]).filter(p=>p.goodsId!==goodsId);
+        return{...c,specificPrices:[...ex,{goodsId,sellingPrice:num}]};
+      }));
+    }
+  }
+  function onPriceBlur(goodsId,val){
+    // On blur, clear local override so it reads from store
+    setPriceInputs(p=>{const n={...p};delete n[goodsId];return n;});
+  }
+  function setPrice(goodsId,val){
+    const num=parseFloat(val)||0;
+    if(selCust===WALK_IN){
+      setGoods(gs=>gs.map(g=>g.id===goodsId?{...g,defaultPrice:num}:g));
+    }else{
+      setCustomers(cs=>cs.map(c=>{
+        if(c.id!==selCust)return c;
+        const ex=(c.specificPrices||[]).filter(p=>p.goodsId!==goodsId);
+        return{...c,specificPrices:[...ex,{goodsId,sellingPrice:num}]};
+      }));
+    }
+  }
+  function delCust(id){if(!confirm('确认删除该客户？'))return;setCustomers(p=>p.filter(c=>c.id!==id));setSelCust(WALK_IN);}
+  function delGood(id){if(!confirm('确认删除此货品？'))return;setGoods(p=>p.filter(g=>g.id!==id));}
+
+  return(
+    <div style={{flex:1,overflowY:'auto',WebkitOverflowScrolling:'touch',padding:'0 16px 24px'}}>
+      {/* Customer selector */}
+      <div style={{paddingTop:4,paddingBottom:12}}>
+        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+          <div style={{position:'relative',flex:1}}>
+            <select value={selCust} onChange={e=>setSelCust(e.target.value)}
+              style={{width:'100%',background:'#fff',border:'1px solid #E5E7EB',borderRadius:14,padding:'12px 36px 12px 14px',fontSize:14,fontWeight:600,color:'#111',outline:'none',appearance:'none',WebkitAppearance:'none',boxShadow:'0 1px 6px rgba(0,0,0,.05)'}}>
+              <option value={WALK_IN}>散客（默认定价）</option>
+              {customers.map(c=><option key={c.id} value={c.id}>{c.name}{c.totalDebt>0?' ⚠️':''}</option>)}
+            </select>
+            <div style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',pointerEvents:'none'}}><IDown s={15} c="#666"/></div>
+          </div>
+          <button onClick={()=>setShowAddCust(true)}
+            style={{background:'#8B1A1A',color:'#fff',border:'none',borderRadius:14,padding:'12px 14px',fontSize:13,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',gap:4,flexShrink:0,boxShadow:'0 2px 8px rgba(139,26,26,.3)'}}>
+            <IPlus s={14} c="white"/>新增
+          </button>
+        </div>
+
+        {/* Named customer quick actions */}
+        {selCust!==WALK_IN&&cust&&(
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:8,background:'#FFF7ED',borderRadius:12,padding:'10px 14px',border:'1px solid #FED7AA'}}>
+            <span style={{fontSize:13,color:'#92400E',fontWeight:500}}>
+              {cust.totalDebt>0?`⚠️ 累计欠款 ${$(cust.totalDebt)}`:'无欠款'}
+            </span>
+            <div style={{display:'flex',gap:8}}>
+              {cust.totalDebt>0&&<button onClick={()=>setShowDebt(cust)}
+                style={{fontSize:12,background:'#FEF3C7',color:'#B45309',border:'1px solid #FCD34D',borderRadius:8,padding:'5px 10px',fontWeight:600,cursor:'pointer'}}>核销欠款</button>}
+              <button onClick={()=>delCust(cust.id)}
+                style={{width:30,height:30,borderRadius:8,background:'#FEE2E2',border:'1px solid #FECACA',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer'}}>
+                <ITrash s={14} c="#DC2626"/>
+              </button>
+            </div>
+          </div>
+        )}
+        {selCust===WALK_IN&&<p style={{fontSize:11,color:'#9CA3AF',marginTop:6,paddingLeft:2}}>修改散客价格为新账单默认起始单价</p>}
+      </div>
+
+      {/* Goods price table */}
+      <div>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+          <span style={{fontSize:11,fontWeight:600,color:'#9CA3AF',letterSpacing:2}}>
+            {selCust===WALK_IN?'散客默认价格':cust?`${cust.name} 专属价格`:'价格配置'}
+          </span>
+          <button onClick={()=>setShowAddGood(true)} style={{fontSize:12,color:'#8B1A1A',fontWeight:600,background:'none',border:'none',cursor:'pointer'}}>＋ 新增货品</button>
+        </div>
+        <div style={{background:'#fff',borderRadius:16,border:'1px solid #F3F4F6',boxShadow:'0 1px 8px rgba(0,0,0,.04)',overflow:'hidden'}}>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 60px 72px 52px',gap:6,padding:'10px 16px',background:'#F9FAFB',borderBottom:'1px solid #F3F4F6',fontSize:11,fontWeight:600,color:'#9CA3AF'}}>
+            <span>品名</span><span style={{textAlign:'right'}}>成本</span><span style={{textAlign:'right'}}>售价</span><span style={{textAlign:'center'}}>操作</span>
+          </div>
+          {goods.map((g,i)=>(
+            <div key={g.id} style={{display:'grid',gridTemplateColumns:'1fr 60px 72px 52px',gap:6,padding:'10px 16px',alignItems:'center',borderBottom:i<goods.length-1?'1px solid #F9FAFB':'none'}}>
+              <span style={{fontSize:14,fontWeight:500,color:'#1F2937'}}>{g.name}</span>
+              <span style={{fontSize:13,color:'#9CA3AF',textAlign:'right'}}>¥{g.costPrice}</span>
+              <input type="number" inputMode="decimal"
+                value={getPriceDisplay(g.id)}
+                onChange={e=>onPriceChange(g.id,e.target.value)}
+                onBlur={e=>onPriceBlur(g.id,e.target.value)}
+                style={{fontSize:14,fontWeight:700,color:'#8B1A1A',textAlign:'right',width:'100%',background:'none',border:'none',borderBottom:'1px solid #F5C0C0',outline:'none',padding:'2px 0',fontFamily:'inherit'}}
+                onFocus={e=>e.target.style.borderBottomColor='#8B1A1A'}
+              />
+              <div style={{display:'flex',justifyContent:'center',gap:6}}>
+                <button onClick={()=>setEditGood({...g})} style={{width:26,height:26,borderRadius:8,background:'#EFF6FF',border:'1px solid #BFDBFE',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer'}}>
+                  <IPencil s={13} c="#3B82F6"/>
+                </button>
+                <button onClick={()=>delGood(g.id)} style={{width:26,height:26,borderRadius:8,background:'#FEF2F2',border:'1px solid #FECACA',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer'}}>
+                  <ITrash s={13} c="#EF4444"/>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <p style={{fontSize:11,color:'#9CA3AF',marginTop:6,paddingLeft:2}}>✏️ 点击售价直接修改；操作图标可编辑名称和成本</p>
+      </div>
+
+      {showAddCust&&<AddCustSheet goods={goods} onClose={()=>setShowAddCust(false)} onCreate={c=>{setCustomers(p=>[...p,c]);setSelCust(c.id);setShowAddCust(false);}}/>}
+      {showAddGood&&<GoodEditSheet onClose={()=>setShowAddGood(false)} onSave={g=>{setGoods(p=>[...p,g]);setShowAddGood(false);}}/>}
+      {editGood&&<GoodEditSheet good={editGood} onClose={()=>setEditGood(null)} onSave={g=>{setGoods(p=>p.map(x=>x.id===g.id?g:x));setEditGood(null);}}/>}
+      {showDebt&&<DebtModal customer={showDebt} onClose={()=>setShowDebt(null)}
+        onSave={a=>{setCustomers(p=>p.map(c=>c.id===showDebt.id?{...c,totalDebt:Math.max(0,(c.totalDebt||0)-a)}:c));setShowDebt(null);}}/>}
+    </div>
+  );
+}
+
+// ── Sub-modals ────────────────────────────────────────────────
+function AddCustSheet({goods,onClose,onCreate}){
+  const [name,setName]=useState('');
+  function create(){
+    if(!name.trim()){alert('请输入客户名称');return;}
+    // Pre-populate specific prices as snapshot of current defaults
+    const specificPrices=goods.map(g=>({goodsId:g.id,sellingPrice:g.defaultPrice}));
+    onCreate({id:uid(),name:name.trim(),specificPrices,totalDebt:0});
+  }
+  return(
+    <Sheet title="新增客户" onClose={onClose}
+      footer={<div style={{display:'flex',gap:8}}><Btn variant="ghost" onClick={onClose}>取消</Btn><Btn onClick={create}>确认添加</Btn></div>}>
+      <p style={{fontSize:14,color:'#6B7280',marginBottom:16}}>添加后可设置专属报价，追踪欠款记录。新客户初始价格与散客默认价一致。</p>
+      <input value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==='Enter'&&create()}
+        placeholder="客户名称，如：张老板" autoFocus
+        style={{width:'100%',background:'#F9FAFB',border:'1px solid #E5E7EB',borderRadius:14,padding:'14px',fontSize:15,outline:'none',fontFamily:'inherit',boxSizing:'border-box'}}
+        onFocus={e=>e.target.style.borderColor='#8B1A1A'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+    </Sheet>
+  );
+}
+function GoodEditSheet({good,onClose,onSave}){
+  const isNew=!good;
+  const [form,setForm]=useState(good||{id:uid(),name:'',costPrice:0,defaultPrice:0});
+  function save(){if(!form.name.trim()){alert('请输入货品名称');return;}onSave(form);}
+  const inp={background:'#F9FAFB',border:'1px solid #E5E7EB',borderRadius:14,padding:'12px 14px',fontSize:15,width:'100%',outline:'none',fontFamily:'inherit',boxSizing:'border-box'};
+  return(
+    <Sheet title={isNew?'新增货品':'编辑货品'} onClose={onClose}
+      footer={<div style={{display:'flex',gap:8}}><Btn variant="ghost" onClick={onClose}>取消</Btn><Btn onClick={save}>保存</Btn></div>}>
+      <div style={{display:'flex',flexDirection:'column',gap:14}}>
+        <div>
+          <div style={{fontSize:12,color:'#9CA3AF',marginBottom:6,fontWeight:500}}>货品名称</div>
+          <input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="如：牛肉" style={inp}
+            onFocus={e=>e.target.style.borderColor='#8B1A1A'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+          <div>
+            <div style={{fontSize:12,color:'#9CA3AF',marginBottom:6,fontWeight:500}}>成本价（¥/斤）</div>
+            <input type="number" inputMode="decimal" value={form.costPrice} onChange={e=>setForm({...form,costPrice:parseFloat(e.target.value)||0})} style={inp}
+              onFocus={e=>e.target.style.borderColor='#8B1A1A'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+          </div>
+          <div>
+            <div style={{fontSize:12,color:'#9CA3AF',marginBottom:6,fontWeight:500}}>散客默认价</div>
+            <input type="number" inputMode="decimal" value={form.defaultPrice} onChange={e=>setForm({...form,defaultPrice:parseFloat(e.target.value)||0})} style={inp}
+              onFocus={e=>e.target.style.borderColor='#8B1A1A'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+          </div>
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+function DebtModal({customer,onClose,onSave}){
+  const [amt,setAmt]=useState('');
+  return(
+    <Sheet title={`核销收款 · ${customer.name}`} onClose={onClose}
+      footer={<div style={{display:'flex',gap:8}}><Btn variant="ghost" onClick={onClose}>取消</Btn><Btn onClick={()=>onSave(parseFloat(amt)||0)}>确认收款</Btn></div>}>
+      <div style={{background:'#FFF7ED',borderRadius:16,padding:'16px 20px',marginBottom:16,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <span style={{fontSize:14,color:'#92400E',fontWeight:500}}>当前欠款</span>
+        <span style={{fontSize:24,fontWeight:700,color:'#D97706'}}>{$(customer.totalDebt)}</span>
+      </div>
+      <div style={{background:'#F9FAFB',borderRadius:16,padding:20}}>
+        <div style={{fontSize:12,color:'#6B7280',marginBottom:8,fontWeight:500}}>本次收款金额</div>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <span style={{fontSize:24,color:'#9CA3AF'}}>¥</span>
+          <input type="number" inputMode="decimal" value={amt} onChange={e=>setAmt(e.target.value)}
+            placeholder="0.00" style={{flex:1,fontSize:32,fontWeight:700,background:'none',border:'none',outline:'none',color:'#111',fontFamily:'inherit'}}/>
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+function ExpModal({onClose,onSave}){
+  const [amt,setAmt]=useState('');const [rem,setRem]=useState('');
+  function save(){if(!parseFloat(amt))return;onSave({id:uid(),timestamp:Date.now(),amount:parseFloat(amt),remark:rem});}
+  const inp={background:'#F9FAFB',border:'1px solid #E5E7EB',borderRadius:14,padding:'12px 14px',fontSize:15,width:'100%',outline:'none',fontFamily:'inherit',boxSizing:'border-box'};
+  return(
+    <Sheet title="记录杂费" onClose={onClose}
+      footer={<div style={{display:'flex',gap:8}}><Btn variant="ghost" onClick={onClose}>取消</Btn><Btn onClick={save}>确认</Btn></div>}>
+      <div style={{display:'flex',flexDirection:'column',gap:12}}>
+        <div style={{background:'#F9FAFB',borderRadius:16,padding:20}}>
+          <div style={{fontSize:12,color:'#6B7280',marginBottom:8}}>金额</div>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <span style={{fontSize:24,color:'#9CA3AF'}}>¥</span>
+            <input type="number" inputMode="decimal" value={amt} onChange={e=>setAmt(e.target.value)}
+              placeholder="0.00" style={{flex:1,fontSize:32,fontWeight:700,background:'none',border:'none',outline:'none',color:'#111',fontFamily:'inherit'}}/>
+          </div>
+        </div>
+        <input value={rem} onChange={e=>setRem(e.target.value)} placeholder="备注（如：运费、屠宰费）" style={inp}
+          onFocus={e=>e.target.style.borderColor='#8B1A1A'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+      </div>
+    </Sheet>
+  );
+}
+
+// ── Bottom Nav ────────────────────────────────────────────────
+function BottomNav({tab,setTab}){
+  return(
+    <div style={{position:'relative',flexShrink:0,overflow:'visible'}}>
+      {/* Floating + button — sits above everything, always red */}
+      <div style={{position:'absolute',top:-20,left:'50%',transform:'translateX(-50%)',zIndex:10}}>
+        <button onClick={()=>setTab('entry')}
+          style={{width:60,height:60,borderRadius:30,border:'4px solid #F2F2F7',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',
+            background:'#8B1A1A',boxShadow:'0 6px 20px rgba(139,26,26,.5)',outline:'none'}}>
+          <IPlus s={28} c="white"/>
+        </button>
+      </div>
+      {/* Nav bar */}
+      <div style={{background:'rgba(255,255,255,.97)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',borderTop:'1px solid #F3F4F6',boxShadow:'0 -2px 16px rgba(0,0,0,.06)'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-around',paddingTop:10,paddingBottom:'max(env(safe-area-inset-bottom,0px),14px)'}}>
+          <button onClick={()=>setTab('records')} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3,padding:'4px 28px',background:'none',border:'none',cursor:'pointer',color:tab==='records'?'#8B1A1A':'#9CA3AF'}}>
+            <IList s={22}/><span style={{fontSize:10,fontWeight:600}}>明细</span>
+          </button>
+          {/* spacer for center button */}
+          <div style={{width:60}}/>
+          <button onClick={()=>setTab('settings')} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3,padding:'4px 28px',background:'none',border:'none',cursor:'pointer',color:tab==='settings'?'#8B1A1A':'#9CA3AF'}}>
+            <IGear s={22}/><span style={{fontSize:10,fontWeight:600}}>配置</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────
+function App(){
+  const [goods,setGoods]         =useLS('oujj_goods',DEF_GOODS);
+  const [customers,setCustomers] =useLS('oujj_customers',[]);
+  const [records,setRecords]     =useLS('oujj_records',[]);
+  const [expenses,setExpenses]   =useLS('oujj_expenses',[]);
+  const [lastCust,setLastCust]   =useLS('oujj_lc',WALK_IN);
+  const [selectedDate,setSelectedDate]=useState(()=>localDateStr());
+  const [tab,setTab]=useState('entry');
+  const [billData,setBillData]=useState(null);
+  const [showExp,setShowExp]=useState(false);
+
+  useEffect(()=>{
+    const link=document.getElementById('appIcon');
+    if(link)link.href=buildCowIcon(192);
+  },[]);
+
+  function addRecord(rec){
+    setRecords(p=>[rec,...p]);
+    if(rec.customerId&&rec.debtAmount>0)
+      setCustomers(p=>p.map(c=>c.id===rec.customerId?{...c,totalDebt:(c.totalDebt||0)+rec.debtAmount}:c));
+    setLastCust(rec.customerId||WALK_IN);
+    setBillData(null);setTab('records');
+  }
+
+  const tabTitle={entry:'今日记账',records:'营业明细',settings:'配置管理'};
+
+  // Header height adapts: records/settings share date pill in red header
+  const showHeaderBand=tab==='entry'||tab==='records';
+
+  return(
+    <div style={{display:'flex',flexDirection:'column',height:'100%',width:'100%',background:'#F2F2F7'}}>
+      {/* Burgundy header */}
+      <div style={{background:'linear-gradient(135deg,#9E1C1C 0%,#6B1010 100%)',flexShrink:0,paddingTop:'env(safe-area-inset-top,20px)',boxShadow:'0 2px 16px rgba(139,26,26,.3)'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 16px 6px'}}>
+          <span style={{fontWeight:700,color:'#fff',fontSize:18}}>{tabTitle[tab]}</span>
+          <span style={{fontSize:12,color:'rgba(255,255,255,.5)',fontWeight:500}}>欧记牛肉</span>
+        </div>
+        {/* Tab-specific controls live inside the red band */}
+        {(tab==='entry'||tab==='records')&&(
+          <div style={{height:2}}/>/* padding handled by tab component */
+        )}
+      </div>
+
+      {/* Content */}
+      <div style={{flex:1,display:'flex',flexDirection:'column',minHeight:0,
+        // entry and records: red background extends behind their top controls
+        background:tab==='settings'?'#F2F2F7':'transparent',position:'relative'}}>
+        {(tab==='entry'||tab==='records')&&(
+          <div style={{position:'absolute',top:0,left:0,right:0,height:120,background:'linear-gradient(180deg,#7A1515 0%,#6B1010 60%,transparent 100%)',zIndex:0,pointerEvents:'none'}}/>
+        )}
+        <div style={{position:'relative',zIndex:1,flex:1,display:'flex',flexDirection:'column',minHeight:0,
+          background:tab==='settings'?'#F2F2F7':'transparent'}}>
+          {tab==='entry'&&<EntryTab goods={goods} customers={customers} lastCustId={lastCust} selectedDate={selectedDate} setSelectedDate={setSelectedDate} onBill={setBillData}/>}
+          {tab==='records'&&<RecordsTab records={records} setRecords={setRecords} expenses={expenses} customers={customers} onAddExpense={()=>setShowExp(true)}/>}
+          {tab==='settings'&&<div style={{paddingTop:8}}><SettingsTab goods={goods} setGoods={setGoods} customers={customers} setCustomers={setCustomers}/></div>}
+        </div>
+      </div>
+
+      <BottomNav tab={tab} setTab={setTab}/>
+
+      {billData&&<BillPreview data={billData} onClose={()=>setBillData(null)} onConfirm={addRecord}/>}
+      {showExp&&<ExpModal onClose={()=>setShowExp(false)} onSave={e=>{setExpenses(p=>[e,...p]);setShowExp(false);}}/>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
